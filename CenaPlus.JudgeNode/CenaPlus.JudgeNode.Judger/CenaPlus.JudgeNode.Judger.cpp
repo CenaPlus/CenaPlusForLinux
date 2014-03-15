@@ -24,5 +24,4 @@ int main(int argc, const char* argv[]){
 	cgroup->SetStandardInput(std::(argv[2]));
 	cgroup->SetStandardOutput(std::(argv[3]));
 	cgroup->SetStandardErrput(std::(argv[4]));
-
 }

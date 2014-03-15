@@ -1,7 +1,7 @@
 #pragma once
 /*
-	CenaPlus::Linux::Cgroup
-	* Decs: Cgroup for c++
+	CenaPlus::Linux::Sandbox
+	* Decs: Sandbox for c++
 	* Author: Yangff
 									*/
 
@@ -14,52 +14,57 @@
 																*/
 
 #include <boost/algorithm/string.hpp>
+#include <boost/fusion/container/list.hpp>
+#include <boost/fusion/include/list.hpp>
+#include <boost/fusion/container/list/list_fwd.hpp>
+#include <boost/fusion/include/list_fwd.hpp>
+#include <pthread.h>
+// working here
 namespace CenaPlus{
 	namespace Linux{
-		class Cgroup {
+		class Sandbox {
+			const int MaxRuningTime = 20000; // 20s
 		public:
-			Cgroup(const std::string cmd);
+			Sandbox(const std::string cmd, const std::list<std::string> args);
 			// Behavior Control
-			int Kill();
 			int Start();
 			// Resource Control
 			void SetTimeLimit(unsigned int millisecond);
-			void SetMemoryLimit(unsigned long long bytes)
+			void SetMemoryLimit(size_t bytes);
 			void SetStandardInput(const std::string input);
 			void SetStandardOutput(const std::string output);
-			void SetStandardError(const std::string output);
-			void SetNetwork(bool flag);
-			void SetStackLimit(unsigned int bytes);
-			void SetLimitDevices(bool flag);
-			void SetCPUCore(int num);
+			void SetStandardErrput(const std::string errput);
+			void SetStackLimit(size_t bytes);
+
+			void SetCPUCore(int num); // unsupported
+			void SetOutputLimit(size_t size);
 			// Exit Code
 			int GetExitCode();
 
-		private:
-			bool Set(const std::string &subsystem, const std::string &property, const std::string &value);
-			bool Get(const std::string &subsystem, const std::string &property, const std::string &value);
-
+		public:
 			enum RunState{
-				Nothing, Runing, Frozen, Killed
+				Nothing, Runing, Done
 			};
-			RunState m_RunState;
+			RunState RunState;
 
-			struct CgroupStartup{
-				int sockets[2];
-				int StandardInput, StandardOutput;
-			} m_Startup;
+			int Exitcode;
 
-			struct CgroupSettings{
-				CgroupStartup startup;
-				int TimeLimit;
-				int MemoryLimit;
-				int StackLimit;
-				int CPUCore;
-				bool LimitDevices;
-				bool Network;
-			} m_Settings;
+		public:
+			struct SandboxSettings{
+				unsigned int TimeLimit; bool doTimeLimit;
+				size_t MemoryLimit; bool doMemoryLimit;
+				size_t StackLimit; bool doStackLimit;
+				size_t OutputLimit; bool doOutputLimit;
+				int CPUCore; // unsupported
+				std::string StandardInput, StandardOutput, StandardErrput;
+				std::list<std::string> Args; std::string cmd;
 
+				int sockets[2]; // for async timer.
+			};
 
+			int pid; pthread_mutex_t mutex;
+		private:
+			SandboxSettings m_Settings;
 		}; // class
 	}; // namespace
 }; // namespace
