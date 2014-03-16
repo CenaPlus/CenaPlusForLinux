@@ -4,14 +4,7 @@
 	* Decs: Sandbox for c++
 	* Author: Yangff
 									*/
-
-/*
-	简介
-	====
-	cgroup是一个系统级别的虚拟化方案，可以通过他限制进程组的资源使用。
-	简单地说就是一个轻量级的虚拟机啦～
-	因为是Linux底层直接支持的，所以效率自然是满满！
-																*/
+// 我放弃cgroup了！
 
 #include <boost/algorithm/string.hpp>
 #include <boost/fusion/container/list.hpp>
@@ -23,8 +16,8 @@
 namespace CenaPlus{
 	namespace Linux{
 		class Sandbox {
-			const int MaxRuningTime = 20000; // 20s
 		public:
+			static const int MaxRuningTime = 20000; // 20s
 			Sandbox(const std::string cmd, const std::list<std::string> args);
 			// Behavior Control
 			int Start();
@@ -38,8 +31,6 @@ namespace CenaPlus{
 
 			void SetCPUCore(int num); // unsupported
 			void SetOutputLimit(size_t size);
-			// Exit Code
-			int GetExitCode();
 
 		public:
 			enum RunState{
@@ -47,15 +38,13 @@ namespace CenaPlus{
 			};
 			RunState RunState;
 
-			int Exitcode;
-
 		public:
 			struct SandboxSettings{
-				unsigned int TimeLimit; bool doTimeLimit;
-				size_t MemoryLimit; bool doMemoryLimit;
-				size_t StackLimit; bool doStackLimit;
-				size_t OutputLimit; bool doOutputLimit;
-				int CPUCore; // unsupported
+				unsigned int TimeLimit = 0; bool doTimeLimit = 0;
+				size_t MemoryLimit = 0; bool doMemoryLimit = 0;
+				size_t StackLimit = 0; bool doStackLimit = 0;
+				size_t OutputLimit = 0; bool doOutputLimit = 0;
+				int CPUCore = 0; // unsupported
 				std::string StandardInput, StandardOutput, StandardErrput;
 				std::list<std::string> Args; std::string cmd;
 
@@ -63,6 +52,15 @@ namespace CenaPlus{
 			};
 
 			int pid; pthread_mutex_t mutex;
+
+			struct RunReport {
+				int Runtime;
+				int MemoryUsed;
+				int ExitCode;
+				int Signal;
+			};
+
+			RunReport GetReport();
 		private:
 			SandboxSettings m_Settings;
 		}; // class

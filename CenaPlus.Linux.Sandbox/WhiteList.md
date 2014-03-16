@@ -1,11 +1,10 @@
 Table of Allow Syscall
 ==========
 1 sys_exit
-3 sys_read ( Only stdio )
-4 sys_write ( Only stdio )
-6 sys_close ( Only stdio )
+3 sys_read
+4 sys_write
+6 sys_close
 8 sys_creat
-11 sys_execve
 18 sys_stat
 19 sys_lseek
 28 sys_fstat

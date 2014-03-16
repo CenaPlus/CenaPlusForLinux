@@ -18,10 +18,15 @@ int main(int argc, const char* argv[]){
 	if (argc != 10){
 		return nArgcError;
 	}
-	CenaPlus::Linux::Cgroup *cgroup = new CenaPlus::Linux::Cgroup(std::string(argv[1]));
-	cgroup->SetTimeLimit(atoi(argv[5]));
-	cgroup->SetMemoryLimit(atoi(argv[6]) * 1048576LL);
-	cgroup->SetStandardInput(std::(argv[2]));
-	cgroup->SetStandardOutput(std::(argv[3]));
-	cgroup->SetStandardErrput(std::(argv[4]));
+	CenaPlus::Linux::Sandbox *sandbox = new CenaPlus::Linux::Sandbox(std::string(argv[1]));
+	sandbox->SetTimeLimit(atoi(argv[5]));
+	sandbox->SetMemoryLimit(atoi(argv[6]) * 1048576LL);
+	sandbox->SetStandardInput(std::(argv[2]));
+	sandbox->SetStandardOutput(std::(argv[3]));
+	sandbox->SetStandardErrput(std::(argv[4]));
+	int ret = sandbox->Start();
+	if (ret != 0){
+		return ret;
+	}
+
 }
