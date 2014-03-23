@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <sys/prctl.h>
+#include <seccomp.h>
 #include <sys/socket.h>
 #include <cstdio>
 #include <cstring>
@@ -55,43 +56,59 @@ namespace CenaPlus{
 				return 0;
 
 			// Set seccomp
-/*
-			const char filters[] =
-				"sys_exit: 1\n"
-				"exit_group: 1\n"
-				"sys_open: 1\n"
-				"sys_read: 1\n"
-				"sys_write: (fd == 1) || (fd == 2)\n"
-				"sys_close: 1\n"
-				"sys_creat: 1\n"
-				"sys_stat: 1\n"
-				"sys_lseek: 1\n"
-				"sys_fstat: 1\n"
-				"sys_access: 1\n"
-				"sys_sync: 1\n"
-				"sys_brk: 1\n"
-				"sys_ioctl: 1\n"
-				"sys_fcntl: 1\n"
-				"sys_olduname: 1\n"
-				"sys_getrlimit: 1\n"
-				"old_select: 1\n"
-				"sys_lstat: 1\n"
-				"sys_readlink: 1\n"
-				"old_readdir: 1\n"
-				"old_mmap: 1\n"
-				"sys_munmap: 1\n"
-				"sys_uname: 1\n"
-				"sys_idle: 1\n"
-				"sys_vm: 1\n"
-				"sys_newuname: 1\n"
-				"sys_mprotect: 1\n"
-				"sys_rt_sigaction: 1\n"
-				"on_next_syscall: 1";*/
+			args->sockets[0]
+			if (seccomp_init(SCMP_ACT_KILL) < 0)
+				return 0;
+			if (seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(read), 1,
+ 			      SCMP_A0(SCMP_CMP_EQ, STDIN_FILENO)) < 0)
+				return 0;
+			if (seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(read), 1,
+ 			      SCMP_A0(SCMP_CMP_EQ, args->sockets[0])) < 0)
+				return 0;
+			if (seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(write), 1,
+ 			      SCMP_A0(SCMP_CMP_EQ, args->sockets[0])) < 0)
+				return 0;
+			if (seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(write), 1,
+ 			      SCMP_A0(SCMP_CMP_EQ, STDOUT_FILENO)) < 0)
+				return 0;
+			if (seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(write), 1,
+ 			      SCMP_A0(SCMP_CMP_EQ, STDERR_FILENO)) < 0)
+				return 0;
+			#define makeAllow(x) { if (seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(x), 0) < 0) ; }
+			makeAllow(exit);
+			makeAllow(exit_group);
+			makeAllow(creat);
+			makeAllow(stat);
+			makeAllow(lseek);
+			makeAllow(fstat);
+			makeAllow(access);
+			makeAllow(sync);
+			makeAllow(brk);
+			makeAllow(ioctl);
+			makeAllow(fcntl);
+			makeAllow(olduname);
+			makeAllow(getrlimit);
+			makeAllow(select);
+			makeAllow(lstat);
+			makeAllow(readlink);
+			makeAllow(readdir);
+			makeAllow(mmap);
+			makeAllow(munmap);
+			makeAllow(uname);
+			makeAllow(idle);
+			makeAllow(vm);
+			makeAllow(newuname);
+			makeAllow(mprotect);
+			makeAllow(rt_sigaction);
+			makeAllow(ptrace);
+			if (seccomp_rule_add(SCMP_ACT_TRAP, SCMP_SYS(execve), 0) < 0)
+				return 0;
+			if (seccomp_load() < 0)
+				return 0;
+			seccomp_release();
 
-			if (prctl(PR_SET_SECCOMP, 2, filters) == -1){
-				return -1;
-			};
 			char opt[2] = {'O','\0'};
+
 
 			// send prepared sign
 
@@ -105,7 +122,9 @@ namespace CenaPlus{
 					pass_args[cnt] = new char[arg.length() + 1];
 					strcpy(pass_args[cnt], arg.c_str()); cnt++;
 				}
-				execvp(args->cmd.c_str(), NULL);  // 3
+				pass_args[cnt] = 0;
+				ptrace(PTRACE_TRACEME, 0, NULL, NULL);
+				execvp(args->cmd.c_str(), pass_args);  // 3
 			}
 			// socket send "O"
 			// waiting socket send "S"
