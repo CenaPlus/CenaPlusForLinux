@@ -41,13 +41,13 @@ namespace CenaPlus{
 				SetRLimit(RLIMIT_CPU, (Sandbox::MaxRuningTime/1000) + 1);
 			if (args->doStackLimit)
 				SetRLimit(RLIMIT_STACK, args->StackLimit);
-			if (args->doMemoryLimit)
-				SetRLimit(RLIMIT_AS, args->MemoryLimit + 1);
+			// if (args->doMemoryLimit)
+			// 	SetRLimit(RLIMIT_AS, args->MemoryLimit + 1);
 			if (args->doOutputLimit)
 				SetRLimit(RLIMIT_FSIZE, args->OutputLimit);
-			// fprintf(stderr, "Setup RLimit.");
+			// // fprintf(stderr, "Setup RLimit.");
 			// open file
-			// fprintf(stderr, "%d\n", args->StandardInput.length());
+			// // fprintf(stderr, "%d\n", args->StandardInput.length());
 			if (args->StandardInput.length() && !freopen(args->StandardInput.c_str(), "r", stdin))
 				return 0;
 			if (args->StandardOutput.length() && !freopen(args->StandardOutput.c_str(), "w", stdout))
@@ -56,26 +56,51 @@ namespace CenaPlus{
 				return 0;
 
 			// Set seccomp
-			args->sockets[0]
-			if (seccomp_init(SCMP_ACT_KILL) < 0)
+			scmp_filter_ctx ctx;
+
+			if ((ctx = seccomp_init(SCMP_ACT_ERRNO(5))) == 0)
 				return 0;
-			if (seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(read), 1,
- 			      SCMP_A0(SCMP_CMP_EQ, STDIN_FILENO)) < 0)
-				return 0;
-			if (seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(read), 1,
+			//if (seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(read), 1,
+ 			//      SCMP_A0(SCMP_CMP_EQ, STDIN_FILENO)) < 0)
+			//	return 0;
+			//if (seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(read), 1,
+ 			//      SCMP_A0(SCMP_CMP_EQ, args->sockets[0])) < 0)
+			//	return 0;
+			if (seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(write), 1,
  			      SCMP_A0(SCMP_CMP_EQ, args->sockets[0])) < 0)
 				return 0;
-			if (seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(write), 1,
- 			      SCMP_A0(SCMP_CMP_EQ, args->sockets[0])) < 0)
-				return 0;
-			if (seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(write), 1,
+			if (seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(write), 1,
  			      SCMP_A0(SCMP_CMP_EQ, STDOUT_FILENO)) < 0)
 				return 0;
-			if (seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(write), 1,
+			if (seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(write), 1,
  			      SCMP_A0(SCMP_CMP_EQ, STDERR_FILENO)) < 0)
 				return 0;
-			#define makeAllow(x) { if (seccomp_rule_add(SCMP_ACT_ALLOW, SCMP_SYS(x), 0) < 0) ; }
+			// fprintf(stderr, "b");
+			int priority = 255;
+
+			#define makeAllow(x) { if (seccomp_syscall_priority(ctx, SCMP_SYS(x), priority--)<0){return 0;};if (seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(x), 0) < 0) return 0; }
+			//makeAllow(open);
+			if (seccomp_rule_add_exact(ctx, SCMP_ACT_ALLOW, SCMP_SYS(open), 1,
+ 			      SCMP_A1(SCMP_CMP_MASKED_EQ, O_WRONLY, 0)) < 0)
+				return 0;
+			//if (seccomp_rule_add_exact(ctx, SCMP_ACT_ERRNO(5), SCMP_SYS(open), 1,
+ 			  //    SCMP_A1(SCMP_CMP_MASKED_EQ, O_CREAT, 1)) < 0)
+				//return 0;
+
+			makeAllow(read);
+			//makeAllow(write);
+			makeAllow(close);
+			// brk mmap access open fstat close read fstat mprotect arch_prctl munmap write!!
+
 			makeAllow(exit);
+			makeAllow(fstat64);
+			makeAllow(stat64);
+			makeAllow(getdents);
+			makeAllow(getdents64);
+			makeAllow(mmap2);
+			makeAllow(mremap);
+			makeAllow(gettimeofday);
+			makeAllow(time);
 			makeAllow(exit_group);
 			makeAllow(creat);
 			makeAllow(stat);
@@ -96,17 +121,19 @@ namespace CenaPlus{
 			makeAllow(munmap);
 			makeAllow(uname);
 			makeAllow(idle);
-			makeAllow(vm);
-			makeAllow(newuname);
 			makeAllow(mprotect);
 			makeAllow(rt_sigaction);
+			makeAllow(uselib);
+			makeAllow(execve);
 			makeAllow(ptrace);
-			if (seccomp_rule_add(SCMP_ACT_TRAP, SCMP_SYS(execve), 0) < 0)
+			makeAllow(arch_prctl);
+			makeAllow(prctl);
+			//if (seccomp_rule_add(SCMP_ACT_TRAP, SCMP_SYS(execve), 0) < 0)
+			//	return 0;
+			if (seccomp_load(ctx) != 0)
 				return 0;
-			if (seccomp_load() < 0)
-				return 0;
-			seccomp_release();
-
+			// seccomp_release(ctx);
+			// fprintf(stderr, "c");
 			char opt[2] = {'O','\0'};
 
 
@@ -115,6 +142,7 @@ namespace CenaPlus{
 			write(args->sockets[0], opt, sizeof(opt));  // 1
 			// waiting timer
 			read(args->sockets[0], opt, sizeof(opt));   // 2
+			// fprintf(stderr, "d");
 			if (opt[0] == 'S'){
 				char ** pass_args = new char*[args->Args.size() + 1];
 				int cnt = 0;
@@ -123,7 +151,8 @@ namespace CenaPlus{
 					strcpy(pass_args[cnt], arg.c_str()); cnt++;
 				}
 				pass_args[cnt] = 0;
-				ptrace(PTRACE_TRACEME, 0, NULL, NULL);
+				// ptrace(PTRACE_TRACEME, 0, NULL, NULL); next feature?
+			//	fprintf(stderr, "e");
 				execvp(args->cmd.c_str(), pass_args);  // 3
 			}
 			// socket send "O"
@@ -138,7 +167,7 @@ namespace CenaPlus{
 			Sandbox * _this = static_cast<Sandbox*>(v.sival_ptr);
 
 			if (pthread_mutex_lock(&_this->mutex) == 0){
-				// fprintf(stderr, "Tick!");
+				// // fprintf(stderr, "Tick!");
 				if (_this->RunState == Sandbox::Runing){
 					kill(_this->pid, SIGKILL);
 				}
@@ -172,8 +201,9 @@ Sandbox::Sandbox(const std::string cmd, const std::list<std::string> args){
 
 int Sandbox::Start(){
 	pid = 0;
-
+	// fprintf(stderr, "X");
 	if ((pid = fork()) == 0) {
+		// fprintf(stderr, "S");
 		sandbox_main(&m_Settings);
 		char opt[20]; opt[0] = 'E'; opt[1] = '\0';
 		write(m_Settings.sockets[0], opt, sizeof(opt));
@@ -231,14 +261,21 @@ int Sandbox::Start(){
 	gettimeofday(&EndTime, NULL);
 	#define GetMs(time) (((long long)time.tv_usec / 1000LL + (long long)time.tv_sec * 1000LL))
 	report.Runtime = GetMs(EndTime) - GetMs(StartTime);
-	timer_delete(timer);
+	if (m_Settings.doTimeLimit)
+		timer_delete(timer);
 	if (m_Settings.doTimeLimit){
 		pthread_mutex_lock(&mutex);
 		RunState = Done;
 		pthread_mutex_destroy(&mutex);
 	} else RunState = Done;
-	report.ExitCode = WEXITSTATUS(status);
-	report.Signal = WSTOPSIG(status);
+	if (WIFEXITED(status)){
+		report.ExitCode = WEXITSTATUS(status);
+		report.Signal = 0;
+	} else if (WIFSIGNALED(status)) {
+		report.Signal = WTERMSIG(status);
+		report.ExitCode = -1;
+	}
+
 	return 0;
 };
 
